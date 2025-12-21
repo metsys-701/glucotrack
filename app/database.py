@@ -14,3 +14,15 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
+
+# YENİ: Database session dependency
+def get_db():
+    """
+    Her API isteği için yeni bir database session oluşturur
+    İstek bitince session otomatik kapanır
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

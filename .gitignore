@@ -1,8 +1,17 @@
-venv/
-__pycache__/
-*.pyc
-.env
-*.sqlite3
+# Debug logs
+debug.log
+*.log
+
+# Database
 *.db
-.idea/
-.vscode/
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/

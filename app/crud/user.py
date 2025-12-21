@@ -5,7 +5,14 @@ from app.core.security import hash_password
 
 def create_user(db: Session, user_in: UserCreate) -> User:
     """
-    Yeni kullanıcı oluşturur (MEVCUT - Dokunma)
+    Create a new user in the database
+    
+    Args:
+        db: Database session
+        user_in: User data (email, password)
+    
+    Returns:
+        Created User object with generated ID
     """
     user = User(
         email=user_in.email,
@@ -18,17 +25,13 @@ def create_user(db: Session, user_in: UserCreate) -> User:
 
 def get_user_by_email(db: Session, email: str):
     """
-    Email'e göre kullanıcıyı database'den bulur
+    Retrieve user by email address
     
     Args:
         db: Database session
-        email: Aranacak email adresi
+        email: Email address to search for
     
     Returns:
-        User object veya None (bulunamazsa)
-    
-    Kullanım:
-        - Register sırasında email kontrolü
-        - Login sırasında kullanıcı doğrulama
+        User object if found, None otherwise
     """
     return db.query(User).filter(User.email == email).first()
