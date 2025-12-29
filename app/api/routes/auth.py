@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from app.core.jwt import create_access_token
 
 from app.schemas.user import UserCreate
 from app.schemas.auth import UserLogin, Token
@@ -36,14 +37,14 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """
-    Authenticate user and return access token
+    Authenticate user and return JWT access token
     
     Args:
         user_data: Login credentials (email, password)
         db: Database session
     
     Returns:
-        Access token and token type
+        JWT access token and token type
     
     Raises:
         HTTPException: If credentials are invalid
@@ -65,8 +66,10 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="Email veya şifre hatalı"
         )
     
-    # Return token (dummy for now, JWT implementation pending)
+    # Create JWT token with user email as subject
+    access_token = create_access_token(data={"sub": user.email})
+    
     return {
-        "access_token": f"dummy_token_for_{user.email}",
+        "access_token": access_token,
         "token_type": "bearer"
     }
