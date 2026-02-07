@@ -1,0 +1,9 @@
+{
+  "date": "2026-01-31",
+  "time": "08:30:00",
+  "meal_type": "breakfast",
+  "fasting_glucose": 110,
+  "postprandial_glucose": 145,
+  "insulin_units": 4.5,
+  "notes": "Normal sabah ölçümü"
+}
