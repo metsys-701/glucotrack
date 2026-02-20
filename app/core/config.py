@@ -1,6 +1,16 @@
-from datetime import timedelta
+from pydantic_settings import BaseSettings
 
-# JWT Configuration
-SECRET_KEY = "your-secret-key-here-change-in-production-min-32-characters"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
+
+class Settings(BaseSettings):
+    """
+    Application configuration settings.
+    Values can be overridden using environment variables.
+    """
+
+    SECRET_KEY: str = "your-secret-key-here-change-in-production-min-32-characters"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+
+# Create a single settings instance to be imported across the app
+settings = Settings()
