@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -38,18 +39,29 @@ def create_record(
 
 @router.get("/", response_model=list[GlucoseResponse])
 def list_records(
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get all glucose records for the authenticated user.
+    Get glucose records for the authenticated user.
+    Optional filtering by start_date and end_date.
     """
 
-    records = (
-        db.query(GlucoseRecord)
-        .filter(GlucoseRecord.user_id == current_user.id)
-        .all()
+    query = db.query(GlucoseRecord).filter(
+        GlucoseRecord.user_id == current_user.id
     )
+
+    # Apply start date filter
+    if start_date:
+        query = query.filter(GlucoseRecord.created_at >= start_date)
+
+    # Apply end date filter
+    if end_date:
+        query = query.filter(GlucoseRecord.created_at <= end_date)
+
+    records = query.order_by(GlucoseRecord.created_at.desc()).all()
 
     return records
 
