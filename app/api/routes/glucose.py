@@ -1,12 +1,16 @@
 from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
 from app.models.glucose import GlucoseRecord
 from app.schemas.glucose import GlucoseCreate, GlucoseResponse
-from app.core.jwt import get_current_user
 from app.models.user import User
+from app.core.jwt import get_current_user
+
 
 router = APIRouter(
     prefix="/glucose",
@@ -39,31 +43,29 @@ def create_record(
 
 @router.get("/", response_model=list[GlucoseResponse])
 def list_records(
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get glucose records for the authenticated user.
-    Optional filtering by start_date and end_date.
+    Retrieve glucose records for the authenticated user.
+    Optional date filtering supported.
     """
 
     query = db.query(GlucoseRecord).filter(
         GlucoseRecord.user_id == current_user.id
     )
 
-    # Apply start date filter
     if start_date:
-        query = query.filter(GlucoseRecord.created_at >= start_date)
+        start_date_parsed = datetime.fromisoformat(start_date)
+        query = query.filter(GlucoseRecord.created_at >= start_date_parsed)
 
-    # Apply end date filter
     if end_date:
-        query = query.filter(GlucoseRecord.created_at <= end_date)
+        end_date_parsed = datetime.fromisoformat(end_date)
+        query = query.filter(GlucoseRecord.created_at <= end_date_parsed)
 
-    records = query.order_by(GlucoseRecord.created_at.desc()).all()
-
-    return records
+    return query.all()
 
 
 @router.get("/{record_id}", response_model=GlucoseResponse)
@@ -73,17 +75,13 @@ def get_record(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get a single glucose record by ID.
+    Retrieve a specific glucose record by ID.
     """
 
-    record = (
-        db.query(GlucoseRecord)
-        .filter(
-            GlucoseRecord.id == record_id,
-            GlucoseRecord.user_id == current_user.id
-        )
-        .first()
-    )
+    record = db.query(GlucoseRecord).filter(
+        GlucoseRecord.id == record_id,
+        GlucoseRecord.user_id == current_user.id
+    ).first()
 
     if not record:
         raise HTTPException(
@@ -105,14 +103,10 @@ def update_record(
     Update a glucose record.
     """
 
-    record = (
-        db.query(GlucoseRecord)
-        .filter(
-            GlucoseRecord.id == record_id,
-            GlucoseRecord.user_id == current_user.id
-        )
-        .first()
-    )
+    record = db.query(GlucoseRecord).filter(
+        GlucoseRecord.id == record_id,
+        GlucoseRecord.user_id == current_user.id
+    ).first()
 
     if not record:
         raise HTTPException(
@@ -139,14 +133,10 @@ def delete_record(
     Delete a glucose record.
     """
 
-    record = (
-        db.query(GlucoseRecord)
-        .filter(
-            GlucoseRecord.id == record_id,
-            GlucoseRecord.user_id == current_user.id
-        )
-        .first()
-    )
+    record = db.query(GlucoseRecord).filter(
+        GlucoseRecord.id == record_id,
+        GlucoseRecord.user_id == current_user.id
+    ).first()
 
     if not record:
         raise HTTPException(
@@ -158,3 +148,46 @@ def delete_record(
     db.commit()
 
     return {"message": "Record deleted successfully"}
+
+
+@router.get("/stats")
+def get_glucose_statistics(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Return statistical summary of glucose records for the authenticated user.
+    """
+
+    query = db.query(GlucoseRecord).filter(
+        GlucoseRecord.user_id == current_user.id
+    )
+
+    if start_date:
+        start_date_parsed = datetime.fromisoformat(start_date)
+        query = query.filter(GlucoseRecord.created_at >= start_date_parsed)
+
+    if end_date:
+        end_date_parsed = datetime.fromisoformat(end_date)
+        query = query.filter(GlucoseRecord.created_at <= end_date_parsed)
+
+    stats = query.with_entities(
+        func.count(GlucoseRecord.id),
+        func.avg(GlucoseRecord.glucose_value),
+        func.min(GlucoseRecord.glucose_value),
+        func.max(GlucoseRecord.glucose_value)
+    ).first()
+
+    total_records = stats[0] or 0
+    average = float(stats[1]) if stats[1] else 0
+    minimum = stats[2] or 0
+    maximum = stats[3] or 0
+
+    return {
+        "total_records": total_records,
+        "average": round(average, 2),
+        "min": minimum,
+        "max": maximum
+    }
