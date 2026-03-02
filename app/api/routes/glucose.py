@@ -7,7 +7,11 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.models.glucose import GlucoseRecord
-from app.schemas.glucose import GlucoseCreate, GlucoseResponse
+from app.schemas.glucose import (
+    GlucoseCreate,
+    GlucoseResponse,
+    PaginatedGlucoseResponse
+)
 from app.models.user import User
 from app.core.jwt import get_current_user
 
@@ -41,16 +45,18 @@ def create_record(
     return new_record
 
 
-@router.get("/", response_model=list[GlucoseResponse])
+@router.get("/", response_model=PaginatedGlucoseResponse)
 def list_records(
+    skip: int = 0,
+    limit: int = 10,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieve glucose records for the authenticated user.
-    Optional date filtering supported.
+    Retrieve paginated glucose records with optional date filtering.
+    Returns total count for mobile/web pagination support.
     """
 
     query = db.query(GlucoseRecord).filter(
@@ -65,7 +71,21 @@ def list_records(
         end_date_parsed = datetime.fromisoformat(end_date)
         query = query.filter(GlucoseRecord.created_at <= end_date_parsed)
 
-    return query.all()
+    total = query.count()
+
+    records = (
+        query.order_by(GlucoseRecord.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "data": records
+    }
 
 
 @router.get("/{record_id}", response_model=GlucoseResponse)

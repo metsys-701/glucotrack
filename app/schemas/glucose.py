@@ -1,5 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
+from typing import List
 
 
 class GlucoseBase(BaseModel):
@@ -25,3 +26,9 @@ class GlucoseResponse(GlucoseBase):
 
     class Config:
         from_attributes = True
+
+class PaginatedGlucoseResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    data: List[GlucoseResponse]
