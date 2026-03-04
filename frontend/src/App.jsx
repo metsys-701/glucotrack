@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [token, setToken] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [glucoseData, setGlucoseData] = useState([]);
   const [error, setError] = useState("");
+
+  // Fetch glucose records after login
+  useEffect(() => {
+    if (token) {
+      fetchGlucose();
+    }
+  }, [token]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -27,52 +35,102 @@ function App() {
         throw new Error(data.detail || "Login failed");
       }
 
-      setToken(data.access_token);
       localStorage.setItem("token", data.access_token);
+      setToken(data.access_token);
       setError("");
+
     } catch (err) {
       setError(err.message);
     }
   };
 
+  const fetchGlucose = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/glucose/?skip=0&limit=5",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error("Unauthorized or server error");
+        setGlucoseData([]);
+        return;
+      }
+
+      const data = await response.json();
+
+      // Backend pagination response
+      if (data.data) {
+        setGlucoseData(data.data);
+      } else {
+        setGlucoseData([]);
+      }
+
+    } catch (err) {
+      console.error("Error fetching glucose data:", err);
+      setGlucoseData([]);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setGlucoseData([]);
+  };
+
   return (
     <div style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h2>GlucoTrack Login</h2>
+      <h2>GlucoTrack</h2>
 
       {!token ? (
         <form onSubmit={handleLogin}>
-          <div>
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
 
-          <div style={{ marginTop: "10px" }}>
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          <br /><br />
 
-          <button style={{ marginTop: "15px" }} type="submit">
-            Login
-          </button>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
 
-          {error && (
-            <p style={{ color: "red", marginTop: "10px" }}>{error}</p>
-          )}
+          <br /><br />
+
+          <button type="submit">Login</button>
+
+          {error && <p style={{ color: "red" }}>{error}</p>}
         </form>
       ) : (
         <div>
-          <p style={{ color: "green" }}>Login successful 🎯</p>
-          <p>Token stored in localStorage</p>
+          <button onClick={logout}>Logout</button>
+
+          <h3>Glucose Records</h3>
+
+          {glucoseData.length === 0 ? (
+            <p>No records found</p>
+          ) : (
+            <ul>
+              {glucoseData.map((record) => (
+                <li key={record.id}>
+                  {record.glucose_value} mg/dL — {record.note}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
