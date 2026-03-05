@@ -1,285 +1,174 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react"
+import GlucoseChart from "./components/GlucoseChart"
 
 function App() {
 
-  // Login fields
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [stats, setStats] = useState(null)
+  const [records, setRecords] = useState([])
 
-  // JWT token
-  const [token, setToken] = useState(localStorage.getItem("token"));
+  const token = localStorage.getItem("token")
 
-  // Glucose list
-  const [glucoseData, setGlucoseData] = useState([]);
-
-  // New record inputs
-  const [newGlucose, setNewGlucose] = useState("");
-  const [note, setNote] = useState("");
-
-  const [error, setError] = useState("");
-
-
-  // Fetch records when token changes
   useEffect(() => {
-    if (token) {
-      fetchGlucose();
-    }
-  }, [token]);
+
+    fetchDashboard()
+    fetchRecords()
+
+  }, [])
 
 
 
-  // Login user
-  const handleLogin = async (e) => {
+  const fetchDashboard = async () => {
 
-    e.preventDefault();
+    const response = await fetch("http://127.0.0.1:8000/glucose/dashboard", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
 
-    try {
+    const data = await response.json()
 
-      const response = await fetch("http://127.0.0.1:8000/auth/login", {
-        method: "POST",
+    setStats(data)
+
+  }
+
+
+
+  const fetchRecords = async () => {
+
+    const response = await fetch(
+      "http://127.0.0.1:8000/glucose/?skip=0&limit=5",
+      {
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          username: email,
-          password: password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Login failed");
-      }
-
-      // Save token
-      localStorage.setItem("token", data.access_token);
-      setToken(data.access_token);
-
-      setError("");
-
-    } catch (err) {
-
-      setError(err.message);
-
-    }
-  };
-
-
-
-  // Fetch glucose records
-  const fetchGlucose = async () => {
-
-    try {
-
-      const response = await fetch(
-        "http://127.0.0.1:8000/glucose/?skip=0&limit=10",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      setGlucoseData(data.data || []);
-
-    } catch (err) {
-
-      console.error("Fetch error:", err);
-
-    }
-  };
-
-
-
-  // Add new glucose record
-  const addGlucose = async (e) => {
-
-    e.preventDefault();
-
-    try {
-
-      const response = await fetch("http://127.0.0.1:8000/glucose/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          glucose_value: Number(newGlucose),
-          note: note,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to add record");
       }
+    )
 
-      // Clear form
-      setNewGlucose("");
-      setNote("");
+    const data = await response.json()
 
-      // Refresh list
-      fetchGlucose();
+    setRecords(data.data || [])
 
-    } catch (err) {
-
-      console.error("Add error:", err);
-
-    }
-  };
-
-
-
-  // Delete glucose record
-  const deleteRecord = async (id) => {
-
-    try {
-
-      const response = await fetch(
-        `http://127.0.0.1:8000/glucose/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Delete failed");
-      }
-
-      // Refresh records
-      fetchGlucose();
-
-    } catch (err) {
-
-      console.error("Delete error:", err);
-
-    }
-  };
-
-
-
-  // Logout user
-  const logout = () => {
-
-    localStorage.removeItem("token");
-    setToken(null);
-    setGlucoseData([]);
-
-  };
+  }
 
 
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial" }}>
 
-      <h2>GlucoTrack</h2>
+    <div className="min-h-screen bg-gray-100 p-10">
 
-      {!token ? (
+      <h1 className="text-4xl font-bold mb-8">
+        GlucoTrack Dashboard
+      </h1>
 
-        <form onSubmit={handleLogin}>
+      {!stats ? (
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-
-          <br /><br />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-
-          <br /><br />
-
-          <button type="submit">Login</button>
-
-          {error && <p style={{ color: "red" }}>{error}</p>}
-
-        </form>
+        <p>Loading...</p>
 
       ) : (
 
         <div>
 
-          <button onClick={logout}>Logout</button>
+          {/* Dashboard Cards */}
 
-          <br /><br />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
 
-          <h3>Add Glucose Record</h3>
-
-          <form onSubmit={addGlucose}>
-
-            <input
-              type="number"
-              placeholder="Glucose value"
-              value={newGlucose}
-              onChange={(e) => setNewGlucose(e.target.value)}
-              required
+            <Card
+              title="Today Avg"
+              value={stats.today_avg}
+              unit="mg/dL"
             />
 
-            <input
-              type="text"
-              placeholder="Note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
+            <Card
+              title="Last Measurement"
+              value={stats.last_measurement}
+              unit="mg/dL"
             />
 
-            <button type="submit">Add</button>
+            <Card
+              title="Time in Range"
+              value={stats.time_in_range}
+              unit="%"
+            />
 
-          </form>
+            <Card
+              title="Tight Control"
+              value={stats.tight_range}
+              unit="%"
+            />
 
-          <br />
+          </div>
 
-          <h3>Glucose Records</h3>
 
-          {glucoseData.length === 0 ? (
 
-            <p>No records found</p>
+          {/* Recent Records */}
 
-          ) : (
 
-            <ul>
+          <div className="bg-white rounded-xl shadow p-6">
 
-              {glucoseData.map((record) => (
+            <h2 className="text-xl font-semibold mb-4">
+              Recent Glucose Records
+            </h2>
 
-                <li key={record.id}>
+            {records.length === 0 ? (
 
-                  {record.glucose_value} mg/dL — {record.note}
+              <p>No records found</p>
 
-                  <button
-                    style={{ marginLeft: "10px" }}
-                    onClick={() => deleteRecord(record.id)}
+            ) : (
+
+              <ul>
+
+                {records.map((r) => (
+
+                  <li
+                    key={r.id}
+                    className="flex justify-between border-b py-2"
                   >
-                    Delete
-                  </button>
+                    <span>{r.glucose_value} mg/dL</span>
+                    <span className="text-gray-500">{r.note}</span>
+                  </li>
 
-                </li>
+                ))}
 
-              ))}
+              </ul>
 
-            </ul>
+            )}
 
-          )}
+          </div>
+          
+          <GlucoseChart records={records} />
 
         </div>
 
       )}
 
     </div>
-  );
+
+  )
+
 }
 
-export default App;
+
+
+function Card({ title, value, unit }) {
+
+  return (
+
+    <div className="bg-white rounded-xl shadow p-6">
+
+      <p className="text-gray-500 text-sm">
+        {title}
+      </p>
+
+      <p className="text-3xl font-bold mt-2">
+
+        {value ?? "--"} {unit}
+
+      </p>
+
+    </div>
+
+  )
+
+}
+
+export default App

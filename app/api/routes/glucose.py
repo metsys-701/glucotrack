@@ -1,25 +1,16 @@
-from datetime import datetime
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from typing import Optional
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models.glucose import GlucoseRecord
-from app.schemas.glucose import (
-    GlucoseCreate,
-    GlucoseResponse,
-    PaginatedGlucoseResponse
-)
 from app.models.user import User
+from app.schemas.glucose import GlucoseCreate, GlucoseResponse
 from app.core.jwt import get_current_user
 
 
-router = APIRouter(
-    prefix="/glucose",
-    tags=["Glucose Records"]
-)
+router = APIRouter()
 
 
 @router.post("/", response_model=GlucoseResponse)
@@ -45,7 +36,7 @@ def create_record(
     return new_record
 
 
-@router.get("/", response_model=PaginatedGlucoseResponse)
+@router.get("/")
 def list_records(
     skip: int = 0,
     limit: int = 10,
@@ -55,21 +46,23 @@ def list_records(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieve paginated glucose records with optional date filtering.
-    Returns total count for mobile/web pagination support.
+    Retrieve paginated glucose records for the authenticated user.
+    Supports pagination and optional date filtering.
     """
 
     query = db.query(GlucoseRecord).filter(
         GlucoseRecord.user_id == current_user.id
     )
 
+    # Apply start date filter
     if start_date:
-        start_date_parsed = datetime.fromisoformat(start_date)
-        query = query.filter(GlucoseRecord.created_at >= start_date_parsed)
+        start = datetime.fromisoformat(start_date)
+        query = query.filter(GlucoseRecord.created_at >= start)
 
+    # Apply end date filter
     if end_date:
-        end_date_parsed = datetime.fromisoformat(end_date)
-        query = query.filter(GlucoseRecord.created_at <= end_date_parsed)
+        end = datetime.fromisoformat(end_date)
+        query = query.filter(GlucoseRecord.created_at <= end)
 
     total = query.count()
 
@@ -88,61 +81,6 @@ def list_records(
     }
 
 
-@router.get("/{record_id}", response_model=GlucoseResponse)
-def get_record(
-    record_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Retrieve a specific glucose record by ID.
-    """
-
-    record = db.query(GlucoseRecord).filter(
-        GlucoseRecord.id == record_id,
-        GlucoseRecord.user_id == current_user.id
-    ).first()
-
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Record not found"
-        )
-
-    return record
-
-
-@router.put("/{record_id}", response_model=GlucoseResponse)
-def update_record(
-    record_id: int,
-    updated_data: GlucoseCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Update a glucose record.
-    """
-
-    record = db.query(GlucoseRecord).filter(
-        GlucoseRecord.id == record_id,
-        GlucoseRecord.user_id == current_user.id
-    ).first()
-
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Record not found"
-        )
-
-    record.glucose_value = updated_data.glucose_value
-    record.note = updated_data.note
-
-    db.commit()
-    db.refresh(record)
-
-    return record
-
-
 @router.delete("/{record_id}")
 def delete_record(
     record_id: int,
@@ -150,7 +88,7 @@ def delete_record(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Delete a glucose record.
+    Delete a glucose record belonging to the authenticated user.
     """
 
     record = db.query(GlucoseRecord).filter(
@@ -159,55 +97,78 @@ def delete_record(
     ).first()
 
     if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Record not found"
-        )
+        raise HTTPException(status_code=404, detail="Record not found")
 
     db.delete(record)
     db.commit()
 
-    return {"message": "Record deleted successfully"}
+    return {"message": "Record deleted"}
 
 
-@router.get("/stats")
-def get_glucose_statistics(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+@router.get("/dashboard")
+def dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Return statistical summary of glucose records for the authenticated user.
+    Return dashboard statistics for glucose data.
+    Includes averages and time-in-range metrics.
     """
 
-    query = db.query(GlucoseRecord).filter(
+    records = db.query(GlucoseRecord).filter(
         GlucoseRecord.user_id == current_user.id
+    ).order_by(GlucoseRecord.created_at.asc()).all()
+
+    if not records:
+        return {
+            "today_avg": None,
+            "last_measurement": None,
+            "time_in_range": 0,
+            "tight_range": 0,
+            "weekly_avg": None
+        }
+
+    values = [r.glucose_value for r in records]
+
+    # Last measurement
+    last_measurement = records[-1].glucose_value
+
+    # Time in range (70-180 mg/dL)
+    tir = len([v for v in values if 70 <= v <= 180]) / len(values) * 100
+
+    # Tight control range (70-140 mg/dL)
+    tight = len([v for v in values if 70 <= v <= 140]) / len(values) * 100
+
+    # Weekly average
+    week_ago = datetime.utcnow() - timedelta(days=7)
+
+    weekly_records = [
+        r.glucose_value for r in records
+        if r.created_at >= week_ago
+    ]
+
+    weekly_avg = (
+        sum(weekly_records) / len(weekly_records)
+        if weekly_records else None
     )
 
-    if start_date:
-        start_date_parsed = datetime.fromisoformat(start_date)
-        query = query.filter(GlucoseRecord.created_at >= start_date_parsed)
+    # Today's average
+    today = datetime.utcnow().date()
 
-    if end_date:
-        end_date_parsed = datetime.fromisoformat(end_date)
-        query = query.filter(GlucoseRecord.created_at <= end_date_parsed)
+    today_records = [
+        r.glucose_value for r in records
+        if r.created_at.date() == today
+    ]
 
-    stats = query.with_entities(
-        func.count(GlucoseRecord.id),
-        func.avg(GlucoseRecord.glucose_value),
-        func.min(GlucoseRecord.glucose_value),
-        func.max(GlucoseRecord.glucose_value)
-    ).first()
-
-    total_records = stats[0] or 0
-    average = float(stats[1]) if stats[1] else 0
-    minimum = stats[2] or 0
-    maximum = stats[3] or 0
+    today_avg = (
+        sum(today_records) / len(today_records)
+        if today_records else None
+    )
 
     return {
-        "total_records": total_records,
-        "average": round(average, 2),
-        "min": minimum,
-        "max": maximum
+        "today_avg": round(today_avg, 1) if today_avg else None,
+        "last_measurement": last_measurement,
+        "time_in_range": round(tir, 1),
+        "tight_range": round(tight, 1),
+        "weekly_avg": round(weekly_avg, 1) if weekly_avg else None
     }
