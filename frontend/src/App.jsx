@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import GlucoseChart from "./components/GlucoseChart"
+import DashboardCard from "./components/DashboardCard"
+import GlucoseAlert from "./components/GlucoseAlert"
 
 function App() {
 
@@ -9,21 +11,22 @@ function App() {
   const token = localStorage.getItem("token")
 
   useEffect(() => {
-
     fetchDashboard()
     fetchRecords()
-
   }, [])
 
 
 
   const fetchDashboard = async () => {
 
-    const response = await fetch("http://127.0.0.1:8000/glucose/dashboard", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const response = await fetch(
+      "http://127.0.0.1:8000/glucose/dashboard",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    )
 
     const data = await response.json()
 
@@ -72,25 +75,25 @@ function App() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
 
-            <Card
+            <DashboardCard
               title="Today Avg"
               value={stats.today_avg}
               unit="mg/dL"
             />
 
-            <Card
+            <DashboardCard
               title="Last Measurement"
               value={stats.last_measurement}
               unit="mg/dL"
             />
 
-            <Card
+            <DashboardCard
               title="Time in Range"
               value={stats.time_in_range}
               unit="%"
             />
 
-            <Card
+            <DashboardCard
               title="Tight Control"
               value={stats.tight_range}
               unit="%"
@@ -98,10 +101,17 @@ function App() {
 
           </div>
 
+            <GlucoseAlert value={stats.last_measurement} />
+
+          {/* Glucose Chart */}
+
+          <div className="mb-10">
+            <GlucoseChart records={records} />
+          </div>
+
 
 
           {/* Recent Records */}
-
 
           <div className="bg-white rounded-xl shadow p-6">
 
@@ -134,36 +144,10 @@ function App() {
             )}
 
           </div>
-          
-          <GlucoseChart records={records} />
 
         </div>
 
       )}
-
-    </div>
-
-  )
-
-}
-
-
-
-function Card({ title, value, unit }) {
-
-  return (
-
-    <div className="bg-white rounded-xl shadow p-6">
-
-      <p className="text-gray-500 text-sm">
-        {title}
-      </p>
-
-      <p className="text-3xl font-bold mt-2">
-
-        {value ?? "--"} {unit}
-
-      </p>
 
     </div>
 
